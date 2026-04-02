@@ -79,48 +79,20 @@ scheduled one interval after ``start_date``.
 Manual Triggering and Data Intervals
 '''''''''''''''''''''''''''''''''''''
 
-When you manually trigger a DAG (via the UI, CLI, or ``TriggerDagRunOperator``), the data interval calculation works differently than for scheduled runs.
+When you manually trigger a DAG (for example from the UI, CLI, REST API, or
+``TriggerDagRunOperator``), do not assume the run's ``data_interval`` is
+derived from, or equal to, the supplied ``logical_date``.
 
-**Scheduled DAG Runs:**
-For scheduled runs, the data interval is well-defined by the DAG's schedule and represents the time range the DAG should process.
+For scheduled runs, the timetable defines the data interval directly. For
+manually triggered runs, the resulting ``data_interval`` depends on the
+timetable and the trigger path, and may differ from the run's
+``logical_date``.
 
-**Manual DAG Runs:**
-For manual runs, Airflow needs to infer what data interval the run should cover.
+If your DAG logic needs the user-specified date for a manual run, use
+``logical_date`` explicitly instead of assuming it matches
+``data_interval_start`` or ``data_interval_end``.
 
-.. note::
-
-   **Important Change in Airflow 3**: The way data intervals are calculated for manual DAG triggering changed in Airflow 3. In Airflow 2.x, the data interval was calculated based on the ``logical_date`` you specified. In Airflow 3.x, the data interval is calculated based on the ``run_after`` parameter (typically the current time when the run is queued).
-
-This means:
-
-- **logical_date**: Always reflects the logical date you specify when triggering (unchanged between versions)
-- **data_interval_start/end**: Now reflects the interval calculated from the trigger time, not the logical date
-
-**Example of the difference:**
-
-.. code-block:: python
-
-   # When manually triggering with logical_date = 2024-01-15 at 10:30 AM
-
-   # Airflow 2.x behavior:
-   # logical_date = 2024-01-15 00:00:00
-   # data_interval_start = 2024-01-15 00:00:00  (same as logical_date)
-   # data_interval_end = 2024-01-16 00:00:00
-
-   # Airflow 3.x behavior:
-   # logical_date = 2024-01-15 00:00:00  (same as specified)
-   # data_interval_start = 2024-01-15 10:30:00  (based on trigger time)
-   # data_interval_end = 2024-01-16 10:30:00
-
-**Best Practices for Manual Triggering:**
-
-1. **Use logical_date for consistent behavior**: If you need the specific date you triggered for, use ``logical_date`` instead of ``data_interval_start``
-
-2. **Understand data_interval behavior**: If your tasks rely on ``data_interval_start`` or ``data_interval_end``, be aware they now reflect the trigger timing
-
-3. **Test both trigger methods**: Ensure your DAGs work correctly with both scheduled and manual triggering
-
-For detailed migration guidance when upgrading to Airflow 3, see :ref:`data-interval-manual-triggering`.
+For upgrade guidance, see :ref:`data-interval-manual-triggering`.
 
 Re-run Dag
 ''''''''''
@@ -317,7 +289,8 @@ Example of a parameterized Dag:
 
     parameterized_task = BashOperator(
         task_id="parameterized_task",
-        bash_command="echo value: {{ dag_run.conf['conf1'] }}",
+        bash_command="echo \"here is the message: '$message'\"",
+        env={"message": '{{ dag_run.conf["message"] if dag_run else "" }}'},
         dag=dag,
     )
 
